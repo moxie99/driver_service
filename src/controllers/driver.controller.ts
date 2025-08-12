@@ -148,7 +148,10 @@ export const confirmOtp = async (
         error: 'OTP expired, please request a new one',
       } as ApiResponse)
     }
-    if (otpRecord.purpose === 'registration') {
+    if (
+      otpRecord.purpose === 'registration' ||
+      otpRecord.purpose === 'confirm_onboarding'
+    ) {
       const pendingDriver = await PendingDriver.findOne({ email })
       if (!pendingDriver) {
         return res.status(404).json({
@@ -251,7 +254,7 @@ export const resendOtp = async (req: AuthRequest, res: Response) => {
       { email, otp, expiresAt, lastSent, isValid: true },
       { upsert: true, new: true }
     )
-    await sendOtpEmail(email, otp, 'completeOnboarding')
+    await sendOtpEmail(email, otp, 'confirm_onboarding')
     res.status(200).json({
       statusCode: '00',
       message: 'New OTP sent to your email',
@@ -410,7 +413,7 @@ export const login = async (req: AuthRequest, res: Response) => {
         { email, otp, expiresAt, lastSent, isValid: true },
         { upsert: true, new: true }
       )
-      await sendOtpEmail(email, otp, 'completeOnboarding')
+      await sendOtpEmail(email, otp, 'confirm_onboarding')
       return res.status(400).json({
         statusCode: '02',
         message: 'New OTP sent to email, please confirm your email',

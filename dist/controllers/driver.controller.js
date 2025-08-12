@@ -149,7 +149,8 @@ const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
                 error: 'OTP expired, please request a new one',
             });
         }
-        if (otpRecord.purpose === 'registration') {
+        if (otpRecord.purpose === 'registration' ||
+            otpRecord.purpose === 'confirm_onboarding') {
             const pendingDriver = yield pendingDriver_model_1.default.findOne({ email });
             if (!pendingDriver) {
                 return res.status(404).json({
@@ -242,7 +243,7 @@ const resendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
         const lastSent = new Date();
         yield otp_model_1.default.findOneAndUpdate({ email }, { email, otp, expiresAt, lastSent, isValid: true }, { upsert: true, new: true });
-        yield (0, email_1.sendOtpEmail)(email, otp, 'completeOnboarding');
+        yield (0, email_1.sendOtpEmail)(email, otp, 'confirm_onboarding');
         res.status(200).json({
             statusCode: '00',
             message: 'New OTP sent to your email',
@@ -393,7 +394,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
             const lastSent = new Date();
             yield otp_model_1.default.findOneAndUpdate({ email }, { email, otp, expiresAt, lastSent, isValid: true }, { upsert: true, new: true });
-            yield (0, email_1.sendOtpEmail)(email, otp, 'completeOnboarding');
+            yield (0, email_1.sendOtpEmail)(email, otp, 'confirm_onboarding');
             return res.status(400).json({
                 statusCode: '02',
                 message: 'New OTP sent to email, please confirm your email',
