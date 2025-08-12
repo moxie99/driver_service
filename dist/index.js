@@ -14,10 +14,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const mongoose_1 = __importDefault(require("mongoose"));
-const driver_routes_1 = __importDefault(require("../src/routes/driver.routes"));
+const driver_routes_1 = __importDefault(require("./routes/driver.routes"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const cleanup_1 = require("./utils/cleanup");
-const category_routes_1 = __importDefault(require("../src/routes/category.routes"));
+const category_routes_1 = __importDefault(require("./routes/category.routes"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.use(express_1.default.json());

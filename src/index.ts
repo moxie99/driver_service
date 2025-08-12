@@ -1,9 +1,9 @@
 import express from 'express'
 import mongoose from 'mongoose'
-import driverRoutes from '../src/routes/driver.routes'
+import driverRoutes from './routes/driver.routes'
 import dotenv from 'dotenv'
 import { startOtpCleanup } from './utils/cleanup'
-import categoryRoutes from '../src/routes/category.routes'
+import categoryRoutes from './routes/category.routes'
 dotenv.config()
 
 const app = express()
