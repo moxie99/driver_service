@@ -16,7 +16,6 @@ const express_1 = __importDefault(require("express"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const driver_routes_1 = __importDefault(require("./routes/driver.routes"));
 const dotenv_1 = __importDefault(require("dotenv"));
-const cleanup_1 = require("./utils/cleanup");
 const category_routes_1 = __importDefault(require("./routes/category.routes"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -27,16 +26,15 @@ const startServer = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         yield mongoose_1.default.connect(process.env.MONGODB_URI_DRIVER ||
             'mongodb://localhost:27017/haulage-driver-service');
-        (0, cleanup_1.startOtpCleanup)();
+        // startOtpCleanup()
         console.log('Connected to MongoDB');
         // Drop problematic index
-        yield mongoose_1.default
-            .model('Driver')
-            .collection.dropIndex('licenseNumber_1')
-            .catch((err) => {
-            if (err.codeName !== 'IndexNotFound')
-                throw err;
-        });
+        // await mongoose
+        //   .model('Driver')
+        //   .collection.dropIndex('licenseNumber_1')
+        //   .catch((err) => {
+        //     if (err.codeName !== 'IndexNotFound') throw err
+        //   })
         // Ensure correct indexes
         yield mongoose_1.default.model('Driver').ensureIndexes();
         console.log('Indexes ensured');

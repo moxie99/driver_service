@@ -35,26 +35,27 @@ const emailContent = {
     },
 };
 const sendOtpEmail = (email, otp, subject) => __awaiter(void 0, void 0, void 0, function* () {
-    // Determine the email content based on subject
-    const content = emailContent[subject] || emailContent.Registration;
-    // Split OTP into individual characters for better styling
-    const otpChars = otp.split('');
-    const transporter = nodemailer_1.default.createTransport({
-        service: 'gmail',
-        host: process.env.EMAIL_HOST,
-        port: 587,
-        secure: false,
-        auth: {
-            user: process.env.EMAIL_USERNAME,
-            pass: process.env.EMAIL_PASSWORD,
-        },
-    });
-    const mailOptions = {
-        from: '"Haulage Driver App" <adeolusegun1000@gmail.com>',
-        to: email,
-        subject: `Your Verification Code for ${subject}`,
-        text: `Your verification code is ${otp}. It expires in 5 minutes.`,
-        html: `
+    try {
+        // Determine the email content based on subject
+        const content = emailContent[subject] || emailContent.Registration;
+        // Split OTP into individual characters for better styling
+        const otpChars = otp.split('');
+        const transporter = nodemailer_1.default.createTransport({
+            service: 'gmail',
+            host: process.env.EMAIL_HOST,
+            port: 587,
+            secure: false,
+            auth: {
+                user: process.env.EMAIL_USERNAME,
+                pass: process.env.EMAIL_PASSWORD,
+            },
+        });
+        const mailOptions = {
+            from: '"Haulage Driver App" <adeolusegun1000@gmail.com>',
+            to: email,
+            subject: `Your Verification Code for ${subject}`,
+            text: `Your verification code is ${otp}. It expires in 5 minutes.`,
+            html: `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -219,8 +220,8 @@ const sendOtpEmail = (email, otp, subject) => __awaiter(void 0, void 0, void 0, 
             <p class="otp-title">Your Verification Code</p>
             <div class="otp-boxes">
               ${otpChars
-            .map((char) => `<div class="otp-box">${char}</div>`)
-            .join('')}
+                .map((char) => `<div class="otp-box">${char}</div>`)
+                .join('')}
             </div>
           </div>
           
@@ -249,7 +250,13 @@ const sendOtpEmail = (email, otp, subject) => __awaiter(void 0, void 0, void 0, 
     </body>
     </html>
     `,
-    };
-    yield transporter.sendMail(mailOptions);
+        };
+        yield transporter.sendMail(mailOptions);
+        console.log(`OTP email sent successfully to ${email}`);
+    }
+    catch (error) {
+        console.error('Error sending OTP email:', error);
+        throw error;
+    }
 });
 exports.sendOtpEmail = sendOtpEmail;

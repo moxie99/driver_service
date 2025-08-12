@@ -116,12 +116,15 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             isValid: true,
             purpose: 'registration',
         });
-        yield (0, email_1.sendOtpEmail)(email, otp, 'Registration');
+        console.log(`Generated OTP for ${email}: ${otp}`);
+        // Temporarily skip email sending for testing
+        // await sendOtpEmail(email, otp, 'Registration')
         res.status(200).json({
             statusCode: '00',
-            message: 'OTP sent to email',
+            message: 'OTP generated successfully',
             email,
             purpose: 'registration',
+            otp: otp, // Temporarily include OTP in response for testing
         });
     }
     catch (error) {
@@ -134,7 +137,23 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
 exports.register = register;
 const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        // Validate JWT_SECRET
+        if (!process.env.JWT_SECRET) {
+            console.error('JWT_SECRET environment variable is not set');
+            return res.status(500).json({
+                statusCode: '01',
+                error: 'Server configuration error',
+            });
+        }
+        // Validate request body
         const { email, otp } = req.body;
+        if (!email || !otp) {
+            return res.status(400).json({
+                statusCode: '01',
+                error: 'Email and OTP are required',
+            });
+        }
+        // Find OTP record
         const otpRecord = yield otp_model_1.default.findOne({ email, otp, isValid: true });
         if (!otpRecord) {
             return res.status(400).json({
@@ -142,6 +161,7 @@ const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
                 error: 'Invalid OTP',
             });
         }
+        // Check OTP expiration
         if (otpRecord.expiresAt < new Date()) {
             yield otp_model_1.default.updateOne({ _id: otpRecord._id }, { isValid: false });
             return res.status(400).json({
@@ -151,6 +171,7 @@ const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
         }
         if (otpRecord.purpose === 'registration' ||
             otpRecord.purpose === 'confirm_onboarding') {
+            // Handle registration or onboarding
             const pendingDriver = yield pendingDriver_model_1.default.findOne({ email });
             if (!pendingDriver) {
                 return res.status(404).json({
@@ -166,10 +187,23 @@ const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
                 vehicleType: '',
                 licenseNumber: '',
                 status: 'pending',
-                kycStatus: '',
+                // kycStatus defaults to 'pending' per schema, no need to set explicitly
             });
-            yield driver.save();
-            const token = jsonwebtoken_1.default.sign({ id: driver === null || driver === void 0 ? void 0 : driver._id, email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+            try {
+                yield driver.save();
+            }
+            catch (error) {
+                console.error('Driver save error:', {
+                    message: error.message,
+                    errors: error.errors,
+                });
+                return res.status(400).json({
+                    statusCode: '01',
+                    error: 'Driver validation failed',
+                    details: error.message,
+                });
+            }
+            const token = jsonwebtoken_1.default.sign({ id: driver._id, email }, process.env.JWT_SECRET, { expiresIn: '7d' });
             yield otp_model_1.default.deleteOne({ email });
             yield pendingDriver_model_1.default.deleteOne({ email });
             return res.status(201).json({
@@ -178,7 +212,7 @@ const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
                 data: {
                     token,
                     driver: {
-                        id: driver === null || driver === void 0 ? void 0 : driver._id,
+                        id: driver._id,
                         name: driver.name,
                         email: driver.email,
                         phone: driver.phone,
@@ -188,6 +222,7 @@ const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
             });
         }
         else if (otpRecord.purpose === 'password_reset') {
+            // Handle password reset
             const driver = yield driver_model_1.default.findOne({ email });
             if (!driver) {
                 return res.status(404).json({
@@ -206,14 +241,20 @@ const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
         else {
             return res.status(400).json({
                 statusCode: '01',
-                error: 'Invalid OTP purpose',
+                error: `Invalid OTP purpose: ${otpRecord.purpose}`,
             });
         }
     }
     catch (error) {
+        console.error('Error in confirmOtp:', {
+            message: error.message,
+            stack: error.stack,
+            body: req.body,
+        });
         return res.status(500).json({
             statusCode: '01',
             error: 'Internal server error during OTP confirmation',
+            details: error.message,
         });
     }
 });

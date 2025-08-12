@@ -113,12 +113,15 @@ export const register = async (req: AuthRequest, res: Response) => {
       purpose: 'registration',
     })
 
-    await sendOtpEmail(email, otp, 'Registration')
+    console.log(`Generated OTP for ${email}: ${otp}`)
+    // Temporarily skip email sending for testing
+    // await sendOtpEmail(email, otp, 'Registration')
     res.status(200).json({
       statusCode: '00',
-      message: 'OTP sent to email',
+      message: 'OTP generated successfully',
       email,
       purpose: 'registration',
+      otp: otp, // Temporarily include OTP in response for testing
     } as ApiResponse)
   } catch (error) {
     res.status(500).json({
@@ -133,7 +136,25 @@ export const confirmOtp = async (
   res: Response
 ): Promise<Response> => {
   try {
+    // Validate JWT_SECRET
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET environment variable is not set')
+      return res.status(500).json({
+        statusCode: '01',
+        error: 'Server configuration error',
+      } as ApiResponse)
+    }
+
+    // Validate request body
     const { email, otp } = req.body as OtpData
+    if (!email || !otp) {
+      return res.status(400).json({
+        statusCode: '01',
+        error: 'Email and OTP are required',
+      } as ApiResponse)
+    }
+
+    // Find OTP record
     const otpRecord = await Otp.findOne({ email, otp, isValid: true })
     if (!otpRecord) {
       return res.status(400).json({
@@ -141,6 +162,8 @@ export const confirmOtp = async (
         error: 'Invalid OTP',
       } as ApiResponse)
     }
+
+    // Check OTP expiration
     if (otpRecord.expiresAt < new Date()) {
       await Otp.updateOne({ _id: otpRecord._id }, { isValid: false })
       return res.status(400).json({
@@ -148,10 +171,12 @@ export const confirmOtp = async (
         error: 'OTP expired, please request a new one',
       } as ApiResponse)
     }
+
     if (
       otpRecord.purpose === 'registration' ||
       otpRecord.purpose === 'confirm_onboarding'
     ) {
+      // Handle registration or onboarding
       const pendingDriver = await PendingDriver.findOne({ email })
       if (!pendingDriver) {
         return res.status(404).json({
@@ -159,6 +184,7 @@ export const confirmOtp = async (
           error: 'Pending registration not found',
         } as ApiResponse)
       }
+
       const driver = new Driver({
         name: pendingDriver.name,
         email,
@@ -167,23 +193,39 @@ export const confirmOtp = async (
         vehicleType: '',
         licenseNumber: '',
         status: 'pending',
-        kycStatus: '',
+        kycStatus: 'pending',
       })
-      await driver.save()
+
+      try {
+        await driver.save()
+      } catch (error: any) {
+        console.error('Driver save error:', {
+          message: error.message,
+          errors: error.errors,
+        })
+        return res.status(400).json({
+          statusCode: '01',
+          error: 'Driver validation failed',
+          details: error.message,
+        } as ApiResponse)
+      }
+
       const token = jwt.sign(
-        { id: driver?._id, email },
-        process.env.JWT_SECRET!,
+        { id: driver._id, email },
+        process.env.JWT_SECRET,
         { expiresIn: '7d' }
       )
+
       await Otp.deleteOne({ email })
       await PendingDriver.deleteOne({ email })
+
       return res.status(201).json({
         statusCode: '00',
         message: 'Driver registered successfully',
         data: {
           token,
           driver: {
-            id: driver?._id,
+            id: driver._id,
             name: driver.name,
             email: driver.email,
             phone: driver.phone,
@@ -192,6 +234,7 @@ export const confirmOtp = async (
         },
       } as ApiResponse)
     } else if (otpRecord.purpose === 'password_reset') {
+      // Handle password reset
       const driver = await Driver.findOne({ email })
       if (!driver) {
         return res.status(404).json({
@@ -199,12 +242,15 @@ export const confirmOtp = async (
           error: 'Driver not found',
         } as ApiResponse)
       }
+
       const resetToken = jwt.sign(
         { id: driver._id, email },
-        process.env.JWT_SECRET!,
+        process.env.JWT_SECRET,
         { expiresIn: '15m' }
       )
+
       await Otp.deleteOne({ email })
+
       return res.status(200).json({
         statusCode: '00',
         message: 'OTP verified, proceed to reset password',
@@ -213,13 +259,19 @@ export const confirmOtp = async (
     } else {
       return res.status(400).json({
         statusCode: '01',
-        error: 'Invalid OTP purpose',
+        error: `Invalid OTP purpose: ${otpRecord.purpose}`,
       } as ApiResponse)
     }
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error in confirmOtp:', {
+      message: error.message,
+      stack: error.stack,
+      body: req.body,
+    })
     return res.status(500).json({
       statusCode: '01',
       error: 'Internal server error during OTP confirmation',
+      details: error.message,
     } as ApiResponse)
   }
 }

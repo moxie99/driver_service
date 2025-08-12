@@ -44,29 +44,30 @@ export const sendOtpEmail = async (
   otp: string,
   subject: string
 ) => {
-  // Determine the email content based on subject
-  const content = emailContent[subject] || emailContent.Registration
+  try {
+    // Determine the email content based on subject
+    const content = emailContent[subject] || emailContent.Registration
 
-  // Split OTP into individual characters for better styling
-  const otpChars = otp.split('')
+    // Split OTP into individual characters for better styling
+    const otpChars = otp.split('')
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    host: process.env.EMAIL_HOST,
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USERNAME,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  })
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      host: process.env.EMAIL_HOST,
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USERNAME,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    })
 
-  const mailOptions = {
-    from: '"Haulage Driver App" <adeolusegun1000@gmail.com>',
-    to: email,
-    subject: `Your Verification Code for ${subject}`,
-    text: `Your verification code is ${otp}. It expires in 5 minutes.`,
-    html: `
+    const mailOptions = {
+      from: '"Haulage Driver App" <adeolusegun1000@gmail.com>',
+      to: email,
+      subject: `Your Verification Code for ${subject}`,
+      text: `Your verification code is ${otp}. It expires in 5 minutes.`,
+      html: `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -265,5 +266,10 @@ export const sendOtpEmail = async (
     `,
   }
 
-  await transporter.sendMail(mailOptions)
+    await transporter.sendMail(mailOptions)
+    console.log(`OTP email sent successfully to ${email}`)
+  } catch (error) {
+    console.error('Error sending OTP email:', error)
+    throw error
+  }
 }

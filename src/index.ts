@@ -17,16 +17,16 @@ const startServer = async () => {
       process.env.MONGODB_URI_DRIVER ||
         'mongodb://localhost:27017/haulage-driver-service'
     )
-    startOtpCleanup()
+    // startOtpCleanup()
     console.log('Connected to MongoDB')
 
     // Drop problematic index
-    await mongoose
-      .model('Driver')
-      .collection.dropIndex('licenseNumber_1')
-      .catch((err) => {
-        if (err.codeName !== 'IndexNotFound') throw err
-      })
+    // await mongoose
+    //   .model('Driver')
+    //   .collection.dropIndex('licenseNumber_1')
+    //   .catch((err) => {
+    //     if (err.codeName !== 'IndexNotFound') throw err
+    //   })
 
     // Ensure correct indexes
     await mongoose.model('Driver').ensureIndexes()
