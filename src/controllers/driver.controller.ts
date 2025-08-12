@@ -251,7 +251,14 @@ export const resendOtp = async (req: AuthRequest, res: Response) => {
     const lastSent = new Date()
     await Otp.findOneAndUpdate(
       { email },
-      { email, otp, expiresAt, lastSent, isValid: true },
+      {
+        email,
+        otp,
+        expiresAt,
+        lastSent,
+        isValid: true,
+        purpose: 'confirm_onboarding',
+      },
       { upsert: true, new: true }
     )
     await sendOtpEmail(email, otp, 'confirm_onboarding')
@@ -410,7 +417,14 @@ export const login = async (req: AuthRequest, res: Response) => {
       const lastSent = new Date()
       await Otp.findOneAndUpdate(
         { email },
-        { email, otp, expiresAt, lastSent, isValid: true },
+        {
+          email,
+          otp,
+          expiresAt,
+          lastSent,
+          isValid: true,
+          purpose: 'confirm_onboarding',
+        },
         { upsert: true, new: true }
       )
       await sendOtpEmail(email, otp, 'confirm_onboarding')
