@@ -187,7 +187,7 @@ const confirmOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
                 vehicleType: '',
                 licenseNumber: '',
                 status: 'pending',
-                // kycStatus defaults to 'pending' per schema, no need to set explicitly
+                kycStatus: 'pending',
             });
             try {
                 yield driver.save();
