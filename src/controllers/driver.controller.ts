@@ -1,11 +1,18 @@
 import { NextFunction, Response } from 'express'
 import bcrypt from 'bcryptjs'
+import AWS from 'aws-sdk'
 import jwt from 'jsonwebtoken'
 import Driver, { IDriver } from '../models/driver.model'
 import { ApiResponse, AuthRequest, OtpData, ResetPasswordData } from '../types'
 import { sendOtpEmail } from '../utils/email'
 import Otp from '../models/otp.model'
 import PendingDriver from '../models/pendingDriver.model'
+import Category from '../models/category.model'
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+})
 const generateOtp = () => {
   return Math.floor(1000 + Math.random() * 9000).toString()
 }
@@ -644,62 +651,162 @@ export const updateStatus = async (
   }
 }
 
-export const submitKyc = async (req: AuthRequest, res: Response) => {
+export const submitKyc = async (
+  req: AuthRequest,
+  res: Response
+): Promise<Response> => {
   try {
-    const driver = await Driver.findById(req.userId)
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({
+        statusCode: '04',
+        error: 'User ID not found in token',
+      } as ApiResponse)
+    }
+
+    const driver = await Driver.findById(userId)
     if (!driver) {
       return res.status(404).json({
         statusCode: '05',
         error: 'Driver not found',
       } as ApiResponse)
     }
+
     if (driver.kycStatus === 'processing' || driver.kycStatus === 'confirmed') {
       return res.status(400).json({
         statusCode: '01',
-        error: 'KYC already submitted or approved',
+        error: 'KYC already submitted or confirmed',
       } as ApiResponse)
     }
+
     const {
       location,
       address,
       officeAddress,
       dateOfBirth,
       gender,
-      selfie,
-      driverLicensePicture,
-      vehicleInformationPicture,
-      vehicleInspectionDocumentPicture,
-      daysOfAvailability,
+      availability,
       categories,
     } = req.body
+
+    // Parse and validate availability
+    let parsedAvailability
+    try {
+      parsedAvailability =
+        typeof availability === 'string'
+          ? JSON.parse(availability)
+          : availability
+      if (
+        !parsedAvailability.days ||
+        !Array.isArray(parsedAvailability.days) ||
+        parsedAvailability.days.length === 0
+      ) {
+        throw new Error('Availability days are required')
+      }
+      if (!parsedAvailability.startTime || !parsedAvailability.endTime) {
+        throw new Error('Start time and end time are required')
+      }
+      if (!parsedAvailability.serviceArea) {
+        throw new Error('Service area is required')
+      }
+    } catch (error: any) {
+      return res.status(400).json({
+        statusCode: '01',
+        error: 'Invalid availability format',
+        details: error.message,
+      } as ApiResponse)
+    }
+
+    // Validate categories
+    if (!categories || !Array.isArray(categories) || categories.length === 0) {
+      return res.status(400).json({
+        statusCode: '01',
+        error: 'At least one category is required',
+      } as ApiResponse)
+    }
+
+    const validCategories = await Category.find({ name: { $in: categories } })
+    if (validCategories.length !== categories.length) {
+      return res.status(400).json({
+        statusCode: '01',
+        error: 'One or more categories are invalid',
+      } as ApiResponse)
+    }
+
+    // Handle file uploads
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] }
+    const requiredImages = [
+      'selfie',
+      'driverLicensePicture',
+      'vehicleInformationPicture',
+      'insurancePicture',
+      'vehicleInspectionDocumentPicture',
+    ]
+
+    for (const field of requiredImages) {
+      if (!files[field] || !files[field][0]) {
+        return res.status(400).json({
+          statusCode: '01',
+          error: `${field} is required`,
+        } as ApiResponse)
+      }
+    }
+
     driver.kycData = {
       location,
       address,
-      officeAddress,
-      dateOfBirth,
+      officeAddress: officeAddress || '',
+      dateOfBirth: new Date(dateOfBirth),
       gender,
-      selfie,
-      driversLicense: driverLicensePicture,
-      vehicleInformation: vehicleInformationPicture,
-      vehicleInspectionDocument: vehicleInspectionDocumentPicture,
-      availabilityDays: daysOfAvailability,
+      selfie: files['selfie'][0].location, // S3 URL
+      driverLicensePicture: files['driverLicensePicture'][0].location,
+      vehicleInformationPicture: files['vehicleInformationPicture'][0].location,
+      insurancePicture: files['insurancePicture'][0].location,
+      vehicleInspectionDocumentPicture:
+        files['vehicleInspectionDocumentPicture'][0].location,
+      daysOfAvailability: parsedAvailability.days,
+      startTime: parsedAvailability.startTime,
+      endTime: parsedAvailability.endTime,
+      serviceArea: parsedAvailability.serviceArea,
+      specialNote: parsedAvailability.specialNote || '',
       categories,
     }
+
     driver.kycStatus = 'processing'
-    await driver.save()
+
+    try {
+      await driver.save()
+    } catch (error: any) {
+      console.error('Driver KYC save error:', {
+        message: error.message,
+        errors: error.errors,
+      })
+      return res.status(400).json({
+        statusCode: '01',
+        error: 'Driver KYC validation failed',
+        details: error.message,
+      } as ApiResponse)
+    }
+
     return res.status(200).json({
       statusCode: '00',
       message: 'KYC submitted successfully, now processing',
       data: { kycStatus: driver.kycStatus, kycData: driver.kycData },
     } as ApiResponse)
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    console.error('Error in submitKyc:', {
+      message: error.message,
+      stack: error.stack,
+      body: req.body,
+      files: req.files,
+    })
+    return res.status(500).json({
       statusCode: '01',
-      error: 'Internal server error submitting KYC',
+      error: 'Internal server error during KYC submission',
+      details: error.message,
     } as ApiResponse)
   }
 }
-
 export const getKyc = async (
   req: AuthRequest,
   res: Response
@@ -712,6 +819,7 @@ export const getKyc = async (
         error: 'User ID not found in token',
       } as ApiResponse)
     }
+
     const driver = await Driver.findById(userId)
     if (!driver) {
       return res.status(404).json({
@@ -719,29 +827,67 @@ export const getKyc = async (
         error: 'Driver not found',
       } as ApiResponse)
     }
+
+    const kycData = driver.kycData || {
+      location: '',
+      address: '',
+      officeAddress: '',
+      dateOfBirth: '',
+      gender: '',
+      selfie: '',
+      driverLicensePicture: '',
+      vehicleInformationPicture: '',
+      insurancePicture: '',
+      vehicleInspectionDocumentPicture: '',
+      daysOfAvailability: [],
+      startTime: '',
+      endTime: '',
+      serviceArea: '',
+      specialNote: '',
+      categories: [],
+    }
+
+    // Generate signed URLs for images
+    const imageFields = [
+      'selfie',
+      'driverLicensePicture',
+      'vehicleInformationPicture',
+      'insurancePicture',
+      'vehicleInspectionDocumentPicture',
+    ]
+    const signedUrls: { [key: string]: string } = {}
+    for (const field of imageFields) {
+      if (kycData[field]) {
+        const key =
+          kycData[field].split(`/${process.env.AWS_S3_BUCKET}/`)[1] ||
+          kycData[field]
+        signedUrls[field] = await s3.getSignedUrlPromise('getObject', {
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: key,
+          Expires: 3600, // 1 hour
+        })
+      }
+    }
+
     return res.status(200).json({
       statusCode: '00',
       data: {
         kycStatus: driver.kycStatus,
-        kycData: driver.kycData || {
-          location: '',
-          address: '',
-          officeAddress: '',
-          dateOfBirth: '',
-          gender: '',
-          selfie: '',
-          driverLicensePicture: '',
-          vehicleInformationPicture: '',
-          vehicleInspectionDocumentPicture: '',
-          daysOfAvailability: [],
-          categories: [],
+        kycData: {
+          ...kycData,
+          ...signedUrls,
         },
       },
     } as ApiResponse)
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error in getKyc:', {
+      message: error.message,
+      stack: error.stack,
+    })
     return res.status(500).json({
       statusCode: '01',
       error: 'Internal server error during KYC retrieval',
+      details: error.message,
     } as ApiResponse)
   }
 }

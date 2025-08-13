@@ -11,6 +11,7 @@ export interface IDriver extends Document {
   status: 'pending' | 'approved' | 'suspended'
   kycStatus: 'pending' | 'processing' | 'confirmed' | 'rejected'
   kycData?: KycData
+  isAdmin: boolean
 }
 
 const DriverSchema: Schema = new Schema(
@@ -38,10 +39,11 @@ const DriverSchema: Schema = new Schema(
       dateOfBirth: { type: Date },
       gender: { type: String, enum: ['male', 'female', 'other'] },
       selfie: { type: String },
-      driversLicense: { type: String },
-      vehicleInformation: { type: String },
-      vehicleInspectionDocument: { type: String },
-      availabilityDays: [
+      driverLicensePicture: { type: String },
+      vehicleInformationPicture: { type: String },
+      insurancePicture: { type: String },
+      vehicleInspectionDocumentPicture: { type: String },
+      daysOfAvailability: [
         {
           type: String,
           enum: [
@@ -55,10 +57,13 @@ const DriverSchema: Schema = new Schema(
           ],
         },
       ],
-      categories: {
-        type: [String],
-      },
+      startTime: { type: String },
+      endTime: { type: String },
+      serviceArea: { type: String },
+      specialNote: { type: String },
+      categories: { type: [String] },
     },
+    isAdmin: { type: Boolean, default: false },
   },
   { timestamps: true }
 )
